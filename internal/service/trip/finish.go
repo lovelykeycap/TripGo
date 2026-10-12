@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Service) Finish(ctx context.Context, id uuid.UUID) (domaintrip.Trip, error) {
-	finishedAt := time.Now().UTC()
+	finishedAt := time.Now().UTC().Truncate(time.Microsecond)
 	var result domaintrip.Trip
 
 	err := s.txManager.Do(ctx, func(txCtx context.Context) error {

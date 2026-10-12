@@ -54,3 +54,5 @@ func ClosePool(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("close PostgreSQL pool: %w", ctx.Err())
 	}
 }
+
+

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 	"github.com/lovelykeycap/TripGo/internal/config"
 	"github.com/lovelykeycap/TripGo/internal/handlers/httpapi"
 	"github.com/lovelykeycap/TripGo/internal/infra/postgres"
@@ -29,11 +28,15 @@ type App struct {
 }
 
 func main() {
-	if err := godotenv.Load(".env"); err != nil &&
-		!errors.Is(err, os.ErrNotExist) {
-		slog.Error("failed to load .env file", "error", err)
-		os.Exit(1)
-	}
+
+	var level slog.LevelVar
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: &level,
+
+	})).With("service", "trip-service")
+
+	slog.SetDefault(logger)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -41,11 +44,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: cfg.LogLevel,
-	})).With("service", "trip-service")
-
-	slog.SetDefault(logger)
+	level.Set(cfg.LogLevel)
 
 	rootCtx := context.Background()
 	pool, err := postgres.NewPool(rootCtx, cfg)

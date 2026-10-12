@@ -34,7 +34,9 @@ func (m *TxManager) Do(ctx context.Context, fn func(context.Context) error) (err
 	}
 
 	defer func() {
-		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(txCtx), m.timeout)
+		rollbackCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(txCtx), 
+			m.timeout)
 		defer cancel()
 
 		rollbackErr := tx.Rollback(rollbackCtx)

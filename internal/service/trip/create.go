@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domaintrip.Trip, error) {
-	now := time.Now().UTC()
+	now := time.Now().Truncate(time.Microsecond).UTC()
 	newTrip := domaintrip.Trip{
 		ID:         uuid.New(),
 		UserID:     input.UserID,

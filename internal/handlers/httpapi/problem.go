@@ -15,12 +15,12 @@ type problemDetails struct {
 	Detail string
 }
 
-func (h *Handler) HandleRequestError(w http.ResponseWriter, r *http.Request, _ error) {
+func (h *Handler) HandleRequestError(w http.ResponseWriter, r *http.Request, err error) {
 	h.writeProblem(w, r, problemDetails{
 		Status: http.StatusBadRequest,
 		Code:   "invalid_request",
 		Title:  "Invalid request",
-		Detail: "Request validation failed",
+		Detail: err.Error(),
 	})
 }
 

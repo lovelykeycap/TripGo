@@ -21,6 +21,8 @@ func NewRouter(h *Handler) http.Handler {
 	})
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+
+	
 		if r.URL.RawPath != "" {
 			path = r.URL.RawPath
 		}

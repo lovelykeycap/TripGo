@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -77,13 +78,13 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.DatabaseMaxConns <= 0 {
-		return Config{}, fmt.Errorf("DATABASE_MAX_CONNS must be greater than zero")
+		return Config{}, errors.New("DATABASE_MAX_CONNS must be greater than zero")
 	}
 	if cfg.DatabaseMinConns < 0 {
-		return Config{}, fmt.Errorf("DATABASE_MIN_CONNS must not be negative")
+		return Config{}, errors.New("DATABASE_MIN_CONNS must not be negative")
 	}
 	if cfg.DatabaseMinConns > cfg.DatabaseMaxConns {
-		return Config{}, fmt.Errorf("DATABASE_MIN_CONNS must not exceed DATABASE_MAX_CONNS")
+		return Config{}, errors.New("DATABASE_MIN_CONNS must not exceed DATABASE_MAX_CONNS")
 	}
 
 	cfg.DatabaseMaxConnLifetime, err = durationEnv("DATABASE_MAX_CONN_LIFETIME")
