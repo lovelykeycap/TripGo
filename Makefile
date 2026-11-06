@@ -1,4 +1,4 @@
-.PHONY: build run test generate migrate migrate-down migrate-status migrate-validate
+.PHONY: build run test test-integration lint generate migrate migrate-down migrate-status migrate-validate
 
 build:
 	go build ./...
@@ -22,7 +22,20 @@ run:
 	go run ./cmd/trip-service
 
 test:
-	go test -race ./...
+	@set -eu; \
+	tripgo_coverage=$$(mktemp); \
+	trap 'rm -f "$$tripgo_coverage"' EXIT; \
+	go test -race -count=2 -coverpkg=./internal/domain/...,./internal/usecase/... -coverprofile="$$tripgo_coverage" ./...; \
+	go tool cover -func="$$tripgo_coverage"
+
+test-integration:
+	@set -eu; \
+	$(call load_env,.env) \
+	: "$${DATABASE_URL:?Set DATABASE_URL in the environment or .env}"; \
+	go test -race -count=2 -tags=integration ./internal/repository/...
+
+lint:
+	golangci-lint run ./...
 
 generate:
 	go tool oapi-codegen \
@@ -31,6 +44,7 @@ generate:
 		-package api \
 		-o internal/generated/api.gen.go \
 		contracts/openapi/trip-service.openapi.yaml
+	go generate ./internal/usecase/... ./internal/http/...
 
 define goose
 	@set -eu; \

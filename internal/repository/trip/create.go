@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	domaintrip "github.com/lovelykeycap/TripGo/internal/domain/trip"
-	"github.com/lovelykeycap/TripGo/internal/infra/postgres"
 )
 
 func (r *Repository) Create(ctx context.Context, newTrip domaintrip.Trip) error {
@@ -18,10 +17,10 @@ func (r *Repository) Create(ctx context.Context, newTrip domaintrip.Trip) error 
 
 	query, args, err := sq.Insert("trips").
 		Columns(
-			tripColumns()...
+			tripColumns()...,
 		).
 		Values(
-			tripValues(newTrip)...
+			tripValues(newTrip)...,
 		).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
@@ -29,7 +28,7 @@ func (r *Repository) Create(ctx context.Context, newTrip domaintrip.Trip) error 
 		return fmt.Errorf("build create trip query: %w", err)
 	}
 
-	executor := postgres.ExecutorFromContext(queryCtx, r.pool)
+	executor := r.executor(queryCtx)
 	_, err = executor.Exec(queryCtx, query, args...)
 	if err != nil {
 		var pgErr *pgconn.PgError

@@ -20,8 +20,7 @@ func NewTxManager(pool *pgxpool.Pool, timeout time.Duration) *TxManager {
 }
 
 func (m *TxManager) Do(ctx context.Context, fn func(context.Context) error) (err error) {
-	if _, ok := transactionFromContext(ctx); ok {
-
+	if _, ok := TransactionFromContext(ctx); ok {
 		return fn(ctx)
 	}
 
@@ -35,8 +34,9 @@ func (m *TxManager) Do(ctx context.Context, fn func(context.Context) error) (err
 
 	defer func() {
 		rollbackCtx, cancel := context.WithTimeout(
-			context.WithoutCancel(txCtx), 
-			m.timeout)
+			context.WithoutCancel(txCtx),
+			m.timeout,
+		)
 		defer cancel()
 
 		rollbackErr := tx.Rollback(rollbackCtx)

@@ -99,6 +99,9 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if err := validateTelemetryEnv(); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
