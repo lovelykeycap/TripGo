@@ -6,10 +6,18 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/lovelykeycap/TripGo/internal/config"
 )
 
-func NewPool(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
+func NewPool(
+	ctx context.Context,
+	cfg config.Config,
+	provider trace.TracerProvider,
+	meterProvider metric.MeterProvider,
+) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL configuration: %w", err)
@@ -20,6 +28,11 @@ func NewPool(ctx context.Context, cfg config.Config) (*pgxpool.Pool, error) {
 	poolConfig.MaxConnLifetime = cfg.DatabaseMaxConnLifetime
 	poolConfig.ConnConfig.ConnectTimeout = cfg.DatabaseConnectTimeout
 	poolConfig.PingTimeout = cfg.DatabaseQueryTimeout
+	queryTracer, err := newQueryTracer(provider, meterProvider)
+	if err != nil {
+		return nil, fmt.Errorf("initialize PostgreSQL telemetry: %w", err)
+	}
+	poolConfig.ConnConfig.Tracer = queryTracer
 
 	connectCtx, cancel := context.WithTimeout(ctx, cfg.DatabaseConnectTimeout)
 	defer cancel()
@@ -54,5 +67,3 @@ func ClosePool(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("close PostgreSQL pool: %w", ctx.Err())
 	}
 }
-
-

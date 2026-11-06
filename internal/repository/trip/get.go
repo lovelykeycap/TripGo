@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	domaintrip "github.com/lovelykeycap/TripGo/internal/domain/trip"
-	"github.com/lovelykeycap/TripGo/internal/infra/postgres"
 )
 
 func (r *Repository) Get(ctx context.Context, id uuid.UUID) (domaintrip.Trip, error) {
@@ -18,7 +17,7 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (domaintrip.Trip, er
 	defer cancel()
 
 	query, args, err := sq.Select(
-		tripColumns()...
+		tripColumns()...,
 	).
 		From("trips").
 		Where(sq.Eq{"id": id}).
@@ -28,7 +27,7 @@ func (r *Repository) Get(ctx context.Context, id uuid.UUID) (domaintrip.Trip, er
 		return domaintrip.Trip{}, fmt.Errorf("build get trip query: %w", err)
 	}
 
-	executor := postgres.ExecutorFromContext(queryCtx, r.pool)
+	executor := r.executor(queryCtx)
 	result, err := queryRowToTrip(queryCtx, executor, query, args...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domaintrip.Trip{}, domaintrip.ErrTripNotFound
