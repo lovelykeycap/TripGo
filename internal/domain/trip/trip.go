@@ -15,9 +15,10 @@ type Trip struct {
 	EndPoint   Coordinates
 	Price      int64
 
-	Status     Status
-	StartedAt  time.Time
-	FinishedAt *time.Time
+	Status         Status
+	StartedAt      time.Time
+	FinishedAt     *time.Time
+	LastPositionAt *time.Time
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -25,10 +26,10 @@ type Trip struct {
 
 func New(userID, driverID uuid.UUID, startPoint, endPoint Coordinates, price int64, at time.Time) (Trip, error) {
 	if userID == uuid.Nil {
-		return Trip{}, &ValidationError{Field: "user_id", Reason: "must be a nonzero UUID"}
+		return Trip{}, &ValidationError{Field: "user_id", Reason: nonzeroUUIDReason}
 	}
 	if driverID == uuid.Nil {
-		return Trip{}, &ValidationError{Field: "driver_id", Reason: "must be a nonzero UUID"}
+		return Trip{}, &ValidationError{Field: "driver_id", Reason: nonzeroUUIDReason}
 	}
 	if price < 0 {
 		return Trip{}, &ValidationError{Field: "price", Reason: "must not be negative"}

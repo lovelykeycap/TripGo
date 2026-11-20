@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lovelykeycap/TripGo/internal/config"
+	"github.com/lovelykeycap/TripGo/internal/gateway/push"
 	httptransport "github.com/lovelykeycap/TripGo/internal/http"
 	"github.com/lovelykeycap/TripGo/internal/http/health"
 	"github.com/lovelykeycap/TripGo/internal/http/middleware"
@@ -22,14 +23,20 @@ import (
 	"github.com/lovelykeycap/TripGo/internal/http/trip/create"
 	"github.com/lovelykeycap/TripGo/internal/http/trip/finish"
 	"github.com/lovelykeycap/TripGo/internal/http/trip/get"
+	positioncreate "github.com/lovelykeycap/TripGo/internal/http/trip/positions/create"
+	positionlist "github.com/lovelykeycap/TripGo/internal/http/trip/positions/list"
 	"github.com/lovelykeycap/TripGo/internal/infra/postgres"
 	"github.com/lovelykeycap/TripGo/internal/infra/postgres/telemetry"
 	"github.com/lovelykeycap/TripGo/internal/infra/telemetry/tripmetrics"
 	triprepository "github.com/lovelykeycap/TripGo/internal/repository/trip"
 	"github.com/lovelykeycap/TripGo/internal/repository/triphistory"
+	"github.com/lovelykeycap/TripGo/internal/repository/tripposition"
 	tripcreate "github.com/lovelykeycap/TripGo/internal/usecase/trip/create"
 	tripfinish "github.com/lovelykeycap/TripGo/internal/usecase/trip/finish"
 	tripget "github.com/lovelykeycap/TripGo/internal/usecase/trip/get"
+	createposition "github.com/lovelykeycap/TripGo/internal/usecase/trip/positions/create"
+	listposition "github.com/lovelykeycap/TripGo/internal/usecase/trip/positions/list"
+	"github.com/lovelykeycap/TripGo/internal/worker/positions"
 )
 
 type Container struct {
@@ -38,6 +45,7 @@ type Container struct {
 	logger          *slog.Logger
 	shutdownTimeout time.Duration
 	telemetry       *telemetry.Providers
+	positions       positionRuntime
 }
 
 func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Container, error) {
@@ -45,6 +53,27 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 	if err != nil {
 		return nil, fmt.Errorf("initialize telemetry: %w", err)
 	}
+
+	traceProvider := providers.TracerProvider
+	pushTracer := traceProvider.Tracer("github.com/lovelykeycap/TripGo/internal/gateway/push")
+	pushGateway, err := push.New(cfg.PushHTTPURL, cfg.PushRequestTimeout, pushTracer)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("initialize push gateway: %w", err),
+			shutdownTelemetry(rootCtx, providers, cfg.ShutdownTimeout),
+		)
+	}
+
+	positionQueue := positions.NewQueue(int(cfg.PositionQueueSize))
+	const positionScope = "github.com/lovelykeycap/TripGo/internal/worker/positions"
+	positionMetrics, err := positions.NewMetrics(providers.MeterProvider.Meter(positionScope), positionQueue)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("initialize position metrics: %w", err),
+			shutdownTelemetry(rootCtx, providers, cfg.ShutdownTimeout),
+		)
+	}
+	positionTracer := traceProvider.Tracer(positionScope)
 
 	httpMeter := providers.MeterProvider.Meter("github.com/lovelykeycap/TripGo/internal/http/middleware")
 	metricsMiddleware, err := middleware.Metrics(httpMeter)
@@ -55,7 +84,6 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 		)
 	}
 
-	traceProvider := providers.TracerProvider
 	pool, err := postgres.NewPool(rootCtx, cfg, traceProvider, providers.MeterProvider)
 	if err != nil {
 		if err := shutdownTelemetry(rootCtx, providers, cfg.ShutdownTimeout); err != nil {
@@ -69,6 +97,7 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 
 	tripRepo := triprepository.New(pool, cfg.DatabaseQueryTimeout)
 	historyRepo := triphistory.New(pool, cfg.DatabaseQueryTimeout)
+	positionRepo := tripposition.New(pool, cfg.DatabaseQueryTimeout)
 	txManager := postgres.NewTxManager(pool, cfg.DatabaseQueryTimeout)
 
 	tripMeter := providers.MeterProvider.Meter("github.com/lovelykeycap/TripGo/internal/infra/telemetry/tripmetrics")
@@ -87,6 +116,10 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 	getTrip := tripget.New(tripRepo, getTracer)
 	finishTracer := traceProvider.Tracer("github.com/lovelykeycap/TripGo/internal/usecase/trip/finish")
 	finishTrip := tripfinish.New(tripRepo, historyRepo, txManager, finishTracer, logger, tripMetrics)
+	createPositionTracer := traceProvider.Tracer("github.com/lovelykeycap/TripGo/internal/usecase/trip/positions/create")
+	createPosition := createposition.New(tripRepo, positionRepo, txManager, createPositionTracer, tripMetrics, positionQueue, time.Now)
+	listPositionsTracer := traceProvider.Tracer("github.com/lovelykeycap/TripGo/internal/usecase/trip/positions/list")
+	listPositions := listposition.New(tripRepo, positionRepo, listPositionsTracer)
 
 	responses := response.New(logger)
 
@@ -97,11 +130,13 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 	readyHandler := ready.New(readiness, responses, logger)
 
 	apiServer := httptransport.NewServer(httptransport.Handlers{
-		Create: createHandler,
-		Get:    getHandler,
-		Finish: finishHandler,
-		Health: healthHandler,
-		Ready:  readyHandler,
+		Create:         createHandler,
+		Get:            getHandler,
+		Finish:         finishHandler,
+		Health:         healthHandler,
+		Ready:          readyHandler,
+		CreatePosition: positioncreate.New(createPosition, responses),
+		ListPositions:  positionlist.New(listPositions, responses),
 	})
 	middlewares := []func(http.Handler) http.Handler{
 		middleware.Recover(logger, responses),
@@ -126,6 +161,12 @@ func New(rootCtx context.Context, cfg config.Config, logger *slog.Logger) (*Cont
 		logger:          logger,
 		shutdownTimeout: cfg.ShutdownTimeout,
 		telemetry:       providers,
+		positions: positionRuntime{
+			scanner:  positions.NewScanner(tripRepo, positionQueue, cfg.PositionStaleAfter, logger, positionTracer, positionMetrics),
+			workers:  positions.NewPool(positionQueue, pushGateway, int(cfg.PositionWorkers), cfg.PushRequestTimeout, logger, positionTracer, positionMetrics),
+			interval: cfg.PositionCheckInterval,
+			gateway:  pushGateway,
+		},
 	}
 
 	return container, nil
@@ -136,6 +177,7 @@ func (a *Container) Run(rootCtx context.Context) error {
 	defer stop()
 
 	serverErr := make(chan error, 1)
+	stopPositions := a.positions.start(rootCtx)
 
 	a.logger.Info("starting HTTP server", "addr", a.server.Addr)
 
@@ -154,7 +196,7 @@ func (a *Container) Run(rootCtx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(rootCtx), a.shutdownTimeout)
 	defer cancel()
 
-	shutdownErr := a.shutdown(shutdownCtx)
+	shutdownErr := a.shutdown(shutdownCtx, stopPositions)
 	if serveErr == nil {
 		serveErr = <-serverErr
 	}
@@ -168,7 +210,7 @@ func (a *Container) Run(rootCtx context.Context) error {
 	return errors.Join(serveErr, shutdownErr)
 }
 
-func (a *Container) shutdown(ctx context.Context) error {
+func (a *Container) shutdown(ctx context.Context, stopPositions func(context.Context) error) error {
 	a.logger.Info("shutting down HTTP server")
 
 	var shutdownErr error
@@ -185,6 +227,8 @@ func (a *Container) shutdown(ctx context.Context) error {
 		a.logger.Info("HTTP server stopped")
 	}
 
+	positionsErr := stopPositions(ctx)
+
 	// The final gauge collection still needs the PostgreSQL pool.
 	telemetryErr := a.telemetry.Shutdown(ctx)
 	poolErr := postgres.ClosePool(ctx, a.pool)
@@ -192,5 +236,5 @@ func (a *Container) shutdown(ctx context.Context) error {
 		a.logger.Info("PostgreSQL pool closed")
 	}
 
-	return errors.Join(shutdownErr, poolErr, telemetryErr)
+	return errors.Join(shutdownErr, positionsErr, telemetryErr, poolErr)
 }

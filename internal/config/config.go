@@ -25,6 +25,13 @@ type Config struct {
 	DatabaseMaxConnLifetime time.Duration
 	DatabaseConnectTimeout  time.Duration
 	DatabaseQueryTimeout    time.Duration
+
+	PositionCheckInterval time.Duration
+	PositionStaleAfter    time.Duration
+	PositionWorkers       int32
+	PositionQueueSize     int32
+	PushHTTPURL           string
+	PushRequestTimeout    time.Duration
 }
 
 func Load() (Config, error) {
@@ -100,6 +107,9 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if err := validateTelemetryEnv(); err != nil {
+		return Config{}, err
+	}
+	if err := cfg.loadPositionConfig(); err != nil {
 		return Config{}, err
 	}
 

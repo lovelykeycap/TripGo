@@ -30,7 +30,7 @@ func (r *Repository) Finish(ctx context.Context, finishedTrip domaintrip.Trip) e
 		return fmt.Errorf("update trip: %w", err)
 	}
 	if result.RowsAffected() == 0 {
-		if _, err := r.Get(queryCtx, finishedTrip.ID); err != nil {
+		if err := r.CheckExists(queryCtx, finishedTrip.ID); err != nil {
 			return fmt.Errorf("failed to check trip existence: %w", err)
 		}
 		return domaintrip.ErrTripCompleted

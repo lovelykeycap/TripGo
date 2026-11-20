@@ -6,13 +6,16 @@ import (
 	domaintrip "github.com/lovelykeycap/TripGo/internal/domain/trip"
 )
 
-const statusColumn = "status"
+const (
+	statusColumn       = "status"
+	lastPositionColumn = "last_position_at"
+)
 
 func tripColumns() []string {
 	return []string{
 		"id", "user_id", "driver_id",
 		"start_latitude", "start_longitude", "end_latitude", "end_longitude",
-		"price", statusColumn, "started_at", "finished_at", "created_at", "updated_at",
+		"price", statusColumn, "started_at", "finished_at", lastPositionColumn, "created_at", "updated_at",
 	}
 }
 
@@ -21,7 +24,7 @@ func tripValues(trip domaintrip.Trip) []any {
 		trip.ID, trip.UserID, trip.DriverID,
 		trip.StartPoint.Latitude, trip.StartPoint.Longitude,
 		trip.EndPoint.Latitude, trip.EndPoint.Longitude,
-		trip.Price, trip.Status, trip.StartedAt, trip.FinishedAt,
+		trip.Price, trip.Status, trip.StartedAt, trip.FinishedAt, trip.LastPositionAt,
 		trip.CreatedAt, trip.UpdatedAt,
 	}
 }
@@ -33,6 +36,10 @@ func tripTimeToUtc(trip *domaintrip.Trip) {
 	if trip.FinishedAt != nil {
 		finishedAt := trip.FinishedAt.UTC()
 		trip.FinishedAt = &finishedAt
+	}
+	if trip.LastPositionAt != nil {
+		lastPositionAt := trip.LastPositionAt.UTC()
+		trip.LastPositionAt = &lastPositionAt
 	}
 
 	trip.UpdatedAt = trip.UpdatedAt.UTC()
@@ -55,6 +62,7 @@ func queryRowToTrip(queryCtx context.Context,
 		&result.Status,
 		&result.StartedAt,
 		&result.FinishedAt,
+		&result.LastPositionAt,
 		&result.CreatedAt,
 		&result.UpdatedAt,
 	)

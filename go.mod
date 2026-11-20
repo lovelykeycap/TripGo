@@ -19,6 +19,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.46.0
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
+	go.uber.org/goleak v1.3.0
 )
 
 require (

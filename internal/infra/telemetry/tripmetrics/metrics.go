@@ -9,8 +9,9 @@ import (
 )
 
 type Metrics struct {
-	created   metric.Int64Counter
-	completed metric.Int64Counter
+	created        metric.Int64Counter
+	completed      metric.Int64Counter
+	positionsSaved metric.Int64Counter
 }
 
 func New(meter metric.Meter, trips activeTripCounter, logger *slog.Logger) (*Metrics, error) {
@@ -27,6 +28,13 @@ func New(meter metric.Meter, trips activeTripCounter, logger *slog.Logger) (*Met
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create trips completed counter: %w", err)
+	}
+	positionsSaved, err := meter.Int64Counter("tripgo.positions.saved",
+		metric.WithDescription("Number of successfully saved trip positions"),
+		metric.WithUnit("{position}"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create positions saved counter: %w", err)
 	}
 	_, err = meter.Int64ObservableGauge("tripgo.trips.active",
 		metric.WithDescription("Number of currently active trips"),
@@ -45,7 +53,7 @@ func New(meter metric.Meter, trips activeTripCounter, logger *slog.Logger) (*Met
 	if err != nil {
 		return nil, fmt.Errorf("create active trips gauge: %w", err)
 	}
-	return &Metrics{created: created, completed: completed}, nil
+	return &Metrics{created: created, completed: completed, positionsSaved: positionsSaved}, nil
 }
 
 func (m *Metrics) RecordCreated(ctx context.Context) {
@@ -54,4 +62,8 @@ func (m *Metrics) RecordCreated(ctx context.Context) {
 
 func (m *Metrics) RecordCompleted(ctx context.Context) {
 	m.completed.Add(ctx, 1)
+}
+
+func (m *Metrics) RecordSaved(ctx context.Context) {
+	m.positionsSaved.Add(ctx, 1)
 }

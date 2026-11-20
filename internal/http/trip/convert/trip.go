@@ -18,9 +18,10 @@ func Trip(trip domaintrip.Trip) api.Trip {
 			Latitude:  trip.EndPoint.Latitude,
 			Longitude: trip.EndPoint.Longitude,
 		},
-		Price:      trip.Price,
-		Status:     api.TripStatus(trip.Status),
-		StartedAt:  trip.StartedAt,
-		FinishedAt: trip.FinishedAt,
+		Price:          trip.Price,
+		Status:         api.TripStatus(trip.Status),
+		StartedAt:      trip.StartedAt,
+		FinishedAt:     trip.FinishedAt,
+		LastPositionAt: trip.LastPositionAt,
 	}
 }

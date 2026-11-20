@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const nonzeroUUIDReason = "must be a nonzero UUID"
+
 var (
 	ErrTripNotFound  = errors.New("trip not found")
 	ErrTripCompleted = errors.New("trip already completed")
