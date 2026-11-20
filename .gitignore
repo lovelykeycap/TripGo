@@ -2,6 +2,9 @@
 .env
 .tripgo/
 
+# Скриншоты прикладываются к PR
+/docs/screenshots/
+
 # Сборка
 bin/
 

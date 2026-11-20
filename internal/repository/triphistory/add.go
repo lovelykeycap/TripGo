@@ -7,7 +7,6 @@ import (
 	sq "github.com/Masterminds/squirrel"
 
 	domaintrip "github.com/lovelykeycap/TripGo/internal/domain/trip"
-	"github.com/lovelykeycap/TripGo/internal/infra/postgres"
 )
 
 func (r *Repository) Add(ctx context.Context, change domaintrip.StatusChange) error {
@@ -23,7 +22,7 @@ func (r *Repository) Add(ctx context.Context, change domaintrip.StatusChange) er
 		return fmt.Errorf("build add trip history query: %w", err)
 	}
 
-	executor := postgres.ExecutorFromContext(queryCtx, r.pool)
+	executor := r.executor(queryCtx)
 	if _, err := executor.Exec(queryCtx, query, args...); err != nil {
 		return fmt.Errorf("add trip history: %w", err)
 	}
